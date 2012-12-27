@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import javax.sound.midi.SysexMessage;
+
 import ICTCLAS.I3S.AC.ICTCLAS50;
 
 
@@ -59,8 +61,7 @@ class Word {
 public class ICTCLAS {
 
     private ICTCLAS50 ict;
-    private static final String[] TAGFILTER = new String[]{"v", "f"};
-    private static final int NWEIGHT = 4;
+    private static Map<String, Integer> TAGWEIGHT = new HashMap<String, Integer>();
     
     public ICTCLAS(String conf, String lib, String userDict) throws UnsupportedEncodingException {
         this(conf, lib);
@@ -109,7 +110,8 @@ public class ICTCLAS {
         Integer wordSize = 0;
         for(String str : strs) {
             String[] strinfo = str.split("/");
-            if ((strinfo.length == 2) && (strinfo[0].length() > 1) && (Arrays.binarySearch(TAGFILTER, strinfo[1]) == -1)) {
+            //这里过滤掉垃圾词
+            if ((strinfo.length == 2) && (strinfo[0].length() > 1) && (TAGWEIGHT.get(strinfo[1]) == null || TAGWEIGHT.get(strinfo[1]) != -1)) {
                 
                 Word word = wordCount.get(strinfo[0]);
                 if (word == null) {
@@ -125,10 +127,12 @@ public class ICTCLAS {
         //wordSize = wordCount.size();       
  
         List<Word> words = new ArrayList<Word>(wordCount.values());
+        Integer weight;
         for(Word word : words) {
+        	//这里使用字数比而不是词数比，拉高大词的权重
             Double tf = word.getCount() * word.getWord().length() / wordSize.doubleValue();
-            if ("n".equals(word.getTag())){
-                tf *= NWEIGHT;
+            if ((weight = TAGWEIGHT.get(word.getTag())) != null){
+                tf *= weight;
             }
             word.setTf(tf);
         }
@@ -156,7 +160,15 @@ public class ICTCLAS {
         ps.load(new FileInputStream(conf + "/Configure.properties"));
         String confPath = ps.getProperty("conf_path");
         String libPath = ps.getProperty("lib_path");
-        String userdict = ps.getProperty("user_dict");
+        String userDict = ps.getProperty("user_dict");
+        String _stags_weight = ps.getProperty("tag_weight");
+		String[] _atags_weight = _stags_weight.split(",");
+		for (String _stag_weight : _atags_weight) {
+			String[] kv = _stag_weight.split("->");
+			ICTCLAS.TAGWEIGHT.put(kv[0], Integer.parseInt(kv[1]));
+		}
+		
+
         try {
             ICTCLAS ictclas = new ICTCLAS(confPath, libPath);
             List<Word> words = ictclas.getKeyWords(ictclas.Split(ICTCLAS.fileGetContents(filename)));
